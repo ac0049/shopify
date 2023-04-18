@@ -1,4 +1,14 @@
 <!-- symmetry_5.2.0  -->
+<!-- Product URL in Collections -->
+{%- liquid
+  if collection and settings.prod_thumb_url_within_coll and product.collections contains collection
+    assign product_url = product.url | within: collection
+  else
+    assign product_url = product.url
+  endif
+
+-%}
+
 {%- comment -%}
   Parameters:
   - show_collection_listing_link {boolean} [optional] - Whether to show the collections list link. Default is false.
