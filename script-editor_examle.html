@@ -1,0 +1,109 @@
+<!-- Show rates by customer tag -->
+# ================================ Customizable Settings ================================
+# ================================================================
+# Show Rate(s) for Customer Tag
+#
+# If we have a matching customer, the entered rate(s) will be
+# shown, and all others will be hidden. Otherwise, the entered
+# rate(s) will be hidden.
+#
+#   - 'customer_tag_match_type' determines whether we look for the
+#     customer to be tagged with any of the entered tags or not.
+#     Can be:
+#       - ':include' to check if the customer is tagged
+#       - ':exclude' to make sure the customer isn't tagged
+#   - 'customer_tags' is a list of customer tags to trigger the
+#     campaign
+#   - 'rate_match_type' determines whether the below strings
+#     should be an exact or partial match. Can be:
+#       - ':exact' for an exact match
+#       - ':partial' for a partial match
+#   - 'rate_names' is a list of strings to identify rates
+# ================================================================
+SHOW_RATES_FOR_CUSTOMER_TAG = [
+  {
+    customer_tag_match_type: :include,
+    customer_tags: ["ship_act"],
+    rate_match_type: :partial,
+    rate_names: ["Customer Account"],
+  },
+]
+
+# ================================ Script Code (do not edit) ================================
+# ================================================================
+# CustomerTagSelector
+#
+# Finds whether the supplied customer has any of the entered tags.
+# ================================================================
+class CustomerTagSelector
+  def initialize(match_type, tags)
+    @comparator = match_type == :include ? 'any?' : 'none?'
+    @tags = tags.map { |tag| tag.downcase.strip }
+  end
+
+  def match?(customer)
+    customer_tags = customer.tags.map { |tag| tag.downcase.strip }
+    (@tags & customer_tags).send(@comparator)
+  end
+end
+
+# ================================================================
+# RateNameSelector
+#
+# Finds whether the supplied rate name matches any of the entered
+# names.
+# ================================================================
+class RateNameSelector
+  def initialize(match_type, rate_names)
+    puts (rate_names)
+    @comparator = match_type == :exact ? '==' : 'include?'
+    @rate_names = rate_names.map { |rate_name| rate_name.downcase.strip }
+  end
+
+  def match?(shipping_rate)
+    @rate_names.any? { |name| shipping_rate.name.downcase.send(@comparator, name) }
+  end
+end
+
+# ================================================================
+# ShowRateForCustomerTagCampaign
+#
+# If we have a matching customer, the entered rate(s) will be
+# shown, and all others will be hidden. Otherwise, the entered
+# rate(s) will be hidden.
+# ================================================================
+class ShowRateForCustomerTagCampaign
+  def initialize(campaigns)
+    @campaigns = campaigns
+  end
+
+  def run(cart, shipping_rates)
+    @campaigns.each do |campaign|
+      customer_tag_selector = CustomerTagSelector.new(
+        campaign[:customer_tag_match_type],
+        campaign[:customer_tags]
+      )
+
+      customer_match = cart.customer.nil? ? false : customer_tag_selector.match?(cart.customer)
+
+      rate_name_selector = RateNameSelector.new(
+        campaign[:rate_match_type],
+        campaign[:rate_names]
+      )
+
+      shipping_rates.delete_if do |shipping_rate|
+        rate_name_selector.match?(shipping_rate) != customer_match
+      end
+    end
+  end
+end
+
+CAMPAIGNS = [
+  ShowRateForCustomerTagCampaign.new(SHOW_RATES_FOR_CUSTOMER_TAG),
+]
+
+CAMPAIGNS.each do |campaign|
+  campaign.run(Input.cart, Input.shipping_rates)
+end
+
+Output.shipping_rates = Input.shipping_rates
